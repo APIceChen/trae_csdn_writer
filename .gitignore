@@ -76,12 +76,18 @@ credentials/
 # 项目特定（可选忽略）
 # ====================
 
-# 输出产物（如果太大可忽略）
-# output/articles/*.md
-# output/reports/*.txt
+# 📥 输入数据目录 - 排除大部分动态生成的文件
+input/raw/article_*.md
+input/processed/*.md
 
-# 处理后的数据（通常较大）
-# input/processed/*.md
+# 📤 输出产物目录 - 排除所有动态生成的内容
+output/articles/*.md
+output/reports/*.txt
+
+# ✅ 保留以下关键文件（不忽略）：
+# - input/raw/url_registry.md (URL 记录表)
+# - fewshot_samples/ (Few-Shot 样本库)
+# - templates/ (模板文件)
 
 # 测试生成文件
 tests/generated/

@@ -93,7 +93,10 @@ class CSDNScraper:
         Returns:
             bool: 是否是有效的 CSDN 文章 URL
         """
-        pattern = r'^https?://blog\.csdn\.net/.+/article/details/\d+'
+        # 支持两种格式：
+        # 1. 标准格式: https://blog.csdn.net/<author>/article/details/<id>
+        # 2. 子域名格式: https://<author>.blog.csdn.net/article/details/<id>
+        pattern = r'^https?://(\w+\.)*csdn\.net/.*article/details/\d+'
         return bool(re.match(pattern, url))
 
     def extract_article_id(self, url: str) -> Optional[str]:
@@ -139,9 +142,8 @@ class CSDNScraper:
                 title_tag = soup.find('h1', class_='title-article')
                 title = title_tag.get_text(strip=True) if title_tag else "未知标题"
 
-                # 提取作者信息
-                author_tag = soup.find('a', class_='follow-nickName')
-                author = author_tag.get_text(strip=True) if author_tag else "未知作者"
+                # 提取作者信息（多策略 fallback）
+                author = self.extract_author(soup, url)
 
                 # 提取发布时间
                 time_tag = soup.find('span', class_='time')
@@ -375,6 +377,15 @@ class CSDNScraper:
             # 检查是否是重复行（忽略空格差异）
             normalized = re.sub(r'\s+', ' ', stripped)
 
+            # 🔥 新增：检测紧邻的完全相同行（最常见的情况）
+            # 先标准化：移除常见的列表标记 (-, *, 1. 等)
+            prev_normalized_clean = re.sub(r'^[-*•\d.\s]+', '', prev_line.strip()) if prev_line else ""
+            current_normalized_clean = re.sub(r'^[-*•\d.\s]+', '', stripped)
+
+            if current_normalized_clean and current_normalized_clean == prev_normalized_clean:
+                logger.debug(f"🗑️  移除重复行: {stripped}")
+                continue
+
             # 如果这行内容与上一行非常相似（>80%相同），则跳过
             if prev_line and self.similarity(normalized, prev_line) > 0.8:
                 continue
@@ -413,6 +424,93 @@ class CSDNScraper:
         union = len(set1 | set2)
 
         return intersection / union if union > 0 else 0.0
+
+    def extract_author(self, soup, url: str) -> str:
+        """
+        多策略提取作者信息（增强版）
+
+        Args:
+            soup: BeautifulSoup 对象
+            url: 文章 URL
+
+        Returns:
+            str: 作者名称，如果无法提取则返回 "未知作者"
+        """
+        from urllib.parse import urlparse
+
+        # 策略 1: 原有方式 - 从 follow-nickName 类名提取（最准确）
+        author_tag = soup.find('a', class_='follow-nickName')
+        if author_tag:
+            author = author_tag.get_text(strip=True)
+            if author and author != "未知作者":
+                logger.debug(f"✅ 作者信息（策略1-类名）: {author}")
+                return author
+
+        # 策略 2: 从 URL 路径提取（CSDN 标准格式）
+        try:
+            parsed_url = urlparse(url)
+            path_parts = [p for p in parsed_url.path.split('/') if p]
+
+            # URL 格式: /author_name/article/details/xxxxx
+            if len(path_parts) >= 2 and path_parts[1] == 'article':
+                author_from_url = path_parts[0]
+                if author_from_url and not author_from_url.startswith('article'):
+                    logger.debug(f"✅ 作者信息（策略2-URL）: {author_from_url}")
+                    return author_from_url
+        except Exception as e:
+            logger.debug(f"策略2失败: {e}")
+
+        # 策略 3: 从正文开头提取（格式："整理 | 作者名" 或 "作者 | CSDN"）
+        try:
+            article_content = soup.find('div', id='content_views') or \
+                             soup.find('div', class_='article-content')
+            if article_content:
+                first_para = article_content.find('p')
+                if first_para:
+                    text = first_para.get_text()
+                    # 匹配 "整理 | 作者名" 或 "作者名 | CSDN"
+                    match = re.search(r'整理\s*[｜|]\s*(\S+)', text)
+                    if match:
+                        author = match.group(1)
+                        logger.debug(f"✅ 作者信息（策略3-正文）: {author}")
+                        return author
+
+                    # 匹配 "出品 | CSDN（ID：xxx）"
+                    match = re.search(r'ID[：:]\s*(\w+)', text)
+                    if match:
+                        author = match.group(1)
+                        logger.debug(f"✅ 作者信息（策略3-正文ID）: {author}")
+                        return author
+        except Exception as e:
+            logger.debug(f"策略3失败: {e}")
+
+        # 策略 4: 从 meta 标签提取
+        try:
+            meta_author = soup.find('meta', attrs={'name': 'author'})
+            if meta_author and meta_author.get('content'):
+                author = meta_author['content'].strip()
+                if author:
+                    logger.debug(f"✅ 作者信息（策略4-meta）: {author}")
+                    return author
+        except Exception as e:
+            logger.debug(f"策略4失败: {e}")
+
+        # 策略 5: 备用选择器
+        try:
+            # 尝试其他可能的类名
+            for class_name in ['nickname', 'username', 'user-name']:
+                tag = soup.find('a', class_=class_name)
+                if tag:
+                    author = tag.get_text(strip=True)
+                    if author:
+                        logger.debug(f"✅ 作者信息（策略5-{class_name}）: {author}")
+                        return author
+        except Exception as e:
+            logger.debug(f"策略5失败: {e}")
+
+        # 所有策略都失败
+        logger.warning("⚠️  无法提取作者信息，所有策略均失败")
+        return "未知作者"
 
     async def scrape_with_playwright(self, url: str) -> Optional[Tuple[str, Dict[str, Any]]]:
         """
