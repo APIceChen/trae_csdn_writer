@@ -1,0 +1,33 @@
+{
+  "project": {
+    "name": "CSDN AI Writer",
+    "version": "1.0.0",
+    "description": "专用于CSDN文章自动生成与改写的AI写作助手",
+    "author": "Trae AI Agent",
+    "created_date": "2026-05-28"
+  },
+  "skill": {
+    "name": "csdn-writer",
+    "path": ".trae/skills/csdn-writer/SKILL.md",
+    "trigger_keywords": ["CSDN", "csdn", "洗稿", "改写", "技术博客", "文章改写"]
+  },
+  "paths": {
+    "input_raw": "input/raw/",
+    "input_processed": "input/processed/",
+    "output_articles": "output/articles/",
+    "output_reports": "output/reports/",
+    "scripts": "scripts/",
+    "config": "config/",
+    "templates": "templates/"
+  },
+  "validation": {
+    "min_score_required": 70,
+    "required_checks_passed": true,
+    "auto_validate_after_rewrite": true
+  },
+  "output_format": {
+    "default": "markdown",
+    "encoding": "utf-8",
+    "file_extension": ".md"
+  }
+}
