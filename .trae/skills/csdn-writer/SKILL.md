@@ -113,6 +113,54 @@ python scripts/test_quality.py
 
 **输出位置**：`output/reports/quality_report.txt`
 
+### 3️⃣ **CSDN 文章爬虫** - `scripts/csdn_scraper.py` (v1.0 新增！)
+
+**功能**：通过 URL 抓取 CSDN 文章的**完整原始内容**（非 AI 摘要）
+
+**为什么重要？**
+- ✅ **忠于原文**：获取完整的原始文章，而非简化/摘要版本
+- ✅ **保留细节**：完整保留代码块、表格、格式标记等所有技术细节
+- ✅ **质量保障**：基于完整信息改写，避免技术错误
+
+**运行命令**：
+```bash
+# 基本用法（自动选择最佳方式）
+python scripts/csdn_scraper.py <URL>
+
+# 指定输出文件
+python scripts/csdn_scraper.py <URL> -o output.md
+
+# 使用 Playwright 模式（更完整，但较慢）
+python scripts/csdn_scraper.py <URL> -m playwright
+
+# 示例
+python scripts/csdn_scraper.py https://blog.csdn.net/xxx/article/details/12345678
+```
+
+**支持的抓取方式**：
+
+| 模式 | 技术 | 速度 | 完整度 | 推荐场景 |
+|------|------|------|--------|----------|
+| **auto (默认)** | 自动选择 | 快 | 高 | ✅ **首选，自动优化** |
+| **requests** | requests + bs4 | ⚡ 极快 | 90% | 简单文章、快速测试 |
+| **playwright** | 浏览器自动化 | 🐢 较慢 | 100% | 复杂页面、JS渲染内容 |
+
+**输出内容**：
+- 📄 完整的 Markdown 格式原文
+- 📊 文章元数据（标题、作者、发布时间等）
+- 🔍 内容统计（字数、代码块、表格等）
+- ⏰ 抓取时间和方式记录
+
+**依赖安装**（可选）：
+```bash
+# requests 模式（已默认支持）
+pip install requests beautifulsoup4
+
+# Playwright 模式（可选）
+pip install playwright
+playwright install
+```
+
 ---
 
 ## 🔄 完整工作流程（AI 执行步骤）
@@ -125,9 +173,14 @@ python scripts/test_quality.py
 
 **如果用户提供 URL：**
 ```markdown
-✅ 使用 WebFetch 工具抓取网页内容
-✅ 将原始内容保存到 input/raw/ 目录
+⚠️ 重要：使用爬虫脚本获取完整原始内容（非 WebFetch！）
+
+✅ 优先使用：python scripts/csdn_scraper.py <URL> -o input/raw/<filename>.md
+✅ 将抓取的完整原始内容保存到 input/raw/ 目录
 ✅ 在 input/raw/url_registry.md 中记录链接信息
+✅ 验证内容完整性（字数、代码块等）
+
+⚠️ 不要使用 WebFetch 工具（会返回 AI 摘要，丢失细节）
 ```
 
 **如果提供文本/文件：**
@@ -307,12 +360,17 @@ else:
 
 1. ✅ **读取** `docs/AI_INSTRUCTIONS.md` 获取详细指引
 2. ✅ **加载 Few-Shot 样本**（从 `fewshot_samples/` 读取匹配的样本）
-3. ✅ **接收** 用户输入（URL 或文本）并保存到 `input/raw/`
-4. ✅ **分析** 内容并提取关键信息，保存到 `input/processed/`
-5. ✅ **参考** 样本特征 + `templates/csdn_article_template.md` 进行改写
-6. ✅ **调用** `scripts/csdn_validator.py` 验证质量
-7. ✅ **保存** 文章到 `output/articles/` 和报告到 `output/reports/`
-8. ✅ **返回** 给用户：改写结果 + 质量评分 + 改进建议（如有）
+3. ✅ **接收** 用户输入（URL 或文本）
+4. ⚠️ **如果是 URL → 使用爬虫脚本获取完整原文**：
+   - 运行 `python scripts/csdn_scraper.py <URL> -o input/raw/<filename>.md`
+   - 验证抓取结果完整性
+   - **不要使用 WebFetch**（会丢失细节）
+5. ✅ **保存原始内容**到 `input/raw/` 目录
+6. ✅ **分析** 内容并提取关键信息，保存到 `input/processed/`
+7. ✅ **参考** 样本特征 + `templates/csdn_article_template.md` 进行改写
+8. ✅ **调用** `scripts/csdn_validator.py` 验证质量
+9. ✅ **保存** 文章到 `output/articles/` 和报告到 `output/reports/`
+10. ✅ **返回** 给用户：改写结果 + 质量评分 + 改进建议（如有）
 
 ### **🎯 Few-Shot 使用规范（核心机制）**
 
@@ -389,17 +447,22 @@ elif task_type == "tutorial":
 
 ## 版本信息
 
-- **当前版本**: **v1.2 (Few-Shot 增强版)**
+- **当前版本**: **v1.3 (爬虫增强版)**
 - **更新日期**: 2026-05-28
 - **主要更新**:
   - ✅ 新增标准化项目结构
   - ✅ 集成质量验证脚本
   - ✅ 完善输入/输出归档机制
   - ✅ 添加 AI 使用指令
-  - 🆕 **新增 Few-Shot 小样本提示系统**
-  - 🆕 **集成 Git 版本管理**
-  - 🆕 **提供 2 个高质量样本（工具推荐 + 技术教程）**
-  - 🆕 **建立样本自动匹配和特征提取机制**
+  - ✅ 新增 Few-Shot 小样本提示系统
+  - ✅ 集成 Git 版本管理
+  - ✅ 提供 2 个高质量样本（工具推荐 + 技术教程）
+  - ✅ 建立样本自动匹配和特征提取机制
+  - 🆕 **新增 CSDN 文章爬虫脚本 (csdn_scraper.py)**
+  - 🆕 **支持获取完整原始内容（非 AI 摘要）**
+  - 🆕 **集成 requests + Playwright 双模式抓取**
+  - 🆕 **自动去重和格式优化**
+  - 🆕 **工作流全面升级：URL 输入优先使用爬虫**
 - **适用平台**: Trae IDE
 - **Git 仓库**: https://github.com/APIceChen/trae_csdn_writer.git
 - **维护状态**: 活跃开发中
